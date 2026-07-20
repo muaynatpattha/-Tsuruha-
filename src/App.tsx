@@ -113,9 +113,24 @@ export default function App() {
     return cleanTransactions(INITIAL_TRANSACTIONS);
   });
 
-  // Save transactions to localStorage
+  // Save transactions to localStorage and sync to Express server
   useEffect(() => {
     localStorage.setItem('ecom_sales_transactions_v3', JSON.stringify(transactions));
+    if (isLoadedFromServerRef.current) {
+      fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(transactions)
+      })
+      .then(res => {
+        if (res.ok) setIsServerSynced(true);
+        else setIsServerSynced(false);
+      })
+      .catch(err => {
+        console.error('Error syncing transactions to server:', err);
+        setIsServerSynced(false);
+      });
+    }
   }, [transactions]);
 
   // View Mode: 'ledger' (Main detailed table), 'analytics' (Summaries & Charts), or 'void' (Void tracking dashboard)
@@ -185,6 +200,13 @@ export default function App() {
   // Save admin emails whenever changed
   useEffect(() => {
     localStorage.setItem('ecom_admin_emails', JSON.stringify(adminEmails));
+    if (isLoadedFromServerRef.current) {
+      fetch('/api/admin-emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(adminEmails)
+      }).catch(err => console.error('Error syncing admin emails to server:', err));
+    }
   }, [adminEmails]);
 
   const [isAdminManagerOpen, setIsAdminManagerOpen] = useState<boolean>(false);
@@ -213,6 +235,13 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('ecom_user_accounts', JSON.stringify(userAccounts));
+    if (isLoadedFromServerRef.current) {
+      fetch('/api/user-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userAccounts)
+      }).catch(err => console.error('Error syncing user accounts to server:', err));
+    }
   }, [userAccounts]);
 
   const [loggedInUserCode, setLoggedInUserCode] = useState<string>(() => {
@@ -254,6 +283,118 @@ export default function App() {
   const [currentPasswordConfirm, setCurrentPasswordConfirm] = useState<string>('');
   const [newPasswordValue, setNewPasswordValue] = useState<string>('');
   const [showPasswordText, setShowPasswordText] = useState<boolean>(false);
+
+  const [isLoadingSharedData, setIsLoadingSharedData] = useState(true);
+  const [isServerSynced, setIsServerSynced] = useState<boolean | null>(null);
+  const isLoadedFromServerRef = useRef(false);
+
+  // Load shared data from server on mount
+  useEffect(() => {
+    const fetchSharedData = async () => {
+      try {
+        setIsLoadingSharedData(true);
+        
+        // 1. Fetch transactions
+        const txRes = await fetch('/api/transactions');
+        if (txRes.ok) {
+          const serverTxs = await txRes.json();
+          if (serverTxs && Array.isArray(serverTxs)) {
+            if (serverTxs.length > 0) {
+              setTransactions(serverTxs);
+            } else if (transactions.length > 0) {
+              // Server is empty, initialize server with local data
+              await fetch('/api/transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(transactions)
+              });
+            }
+          }
+        }
+
+        // 2. Fetch user accounts
+        const accountsRes = await fetch('/api/user-accounts');
+        if (accountsRes.ok) {
+          const serverAccounts = await accountsRes.json();
+          if (serverAccounts && Array.isArray(serverAccounts)) {
+            if (serverAccounts.length > 0) {
+              setUserAccounts(serverAccounts);
+            } else if (userAccounts.length > 0) {
+              await fetch('/api/user-accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(userAccounts)
+              });
+            }
+          }
+        }
+
+        // 3. Fetch admin emails
+        const adminsRes = await fetch('/api/admin-emails');
+        if (adminsRes.ok) {
+          const serverAdmins = await adminsRes.json();
+          if (serverAdmins && Array.isArray(serverAdmins)) {
+            if (serverAdmins.length > 0) {
+              setAdminEmails(serverAdmins);
+            } else if (adminEmails.length > 0) {
+              await fetch('/api/admin-emails', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(adminEmails)
+              });
+            }
+          }
+        }
+
+        isLoadedFromServerRef.current = true;
+        setIsServerSynced(true);
+      } catch (err) {
+        console.error('Failed to load shared data from server:', err);
+        setIsServerSynced(false);
+      } finally {
+        setIsLoadingSharedData(false);
+      }
+    };
+
+    fetchSharedData();
+
+    // Set up polling to keep other users' browsers automatically updated every 10 seconds
+    const interval = setInterval(() => {
+      fetch('/api/transactions')
+        .then(res => res.ok ? res.json() : Promise.reject())
+        .then(serverTxs => {
+          if (serverTxs && Array.isArray(serverTxs) && serverTxs.length > 0) {
+            setTransactions(prev => {
+              // Only update state if length or content is different to prevent redundant re-renders
+              if (JSON.stringify(prev) !== JSON.stringify(serverTxs)) {
+                return serverTxs;
+              }
+              return prev;
+            });
+            setIsServerSynced(true);
+          }
+        })
+        .catch(err => {
+          console.warn('Auto-sync check failed:', err);
+        });
+        
+      fetch('/api/user-accounts')
+        .then(res => res.ok ? res.json() : Promise.reject())
+        .then(serverAccounts => {
+          if (serverAccounts && Array.isArray(serverAccounts) && serverAccounts.length > 0) {
+            setUserAccounts(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(serverAccounts)) {
+                return serverAccounts;
+              }
+              return prev;
+            });
+          }
+        })
+        .catch(() => {});
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Customizable Theme and Colors
   const shopeeColor = '#F53D2D';
@@ -1597,11 +1738,27 @@ export default function App() {
             referrerPolicy="no-referrer"
           />
           <div className="flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[18px] font-bold text-slate-800 tracking-tight">ระบบบันทึกยอดขาย Tsuruha</h2>
               <span className="bg-slate-100 text-slate-600 text-[10px] font-extrabold px-2 py-0.5 rounded-md">
                 รวม {stats.totalOrders} รายการออเดอร์
               </span>
+              {isServerSynced === true ? (
+                <span className="bg-emerald-50 text-emerald-700 text-[10px] font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 border border-emerald-100 shadow-2xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  ซิงค์ฐานข้อมูลกลางแล้ว
+                </span>
+              ) : isServerSynced === false ? (
+                <span className="bg-amber-50 text-amber-700 text-[10px] font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 border border-amber-100">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  ใช้ข้อมูลออฟไลน์ชั่วคราว
+                </span>
+              ) : (
+                <span className="bg-slate-50 text-slate-500 text-[10px] font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 border border-slate-100">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse"></span>
+                  กำลังเชื่อมต่อข้อมูล...
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-slate-400 font-medium">บันทึกและแสดงสถิตยอดขายสุทธิของ Shopee และ Lazada ร่วมกันอย่างเป็นระเบียบสำหรับ Tsuruha</p>
             
