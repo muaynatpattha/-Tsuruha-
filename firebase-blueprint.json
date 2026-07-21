@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "An e-commerce sales or void transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "platform": { "type": "string", "enum": ["shopee", "lazada"] },
+        "type": { "type": "string", "enum": ["sale", "void"] },
+        "amount": { "type": "number" },
+        "orders": { "type": "number" },
+        "items": { "type": "number" },
+        "note": { "type": "string" },
+        "staffCode": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "date", "platform", "type", "amount", "orders", "items", "staffCode", "timestamp"]
+    },
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "An employee or admin account of the dashboard",
+      "type": "object",
+      "properties": {
+        "userCode": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string", "enum": ["visitor", "user", "admin"] },
+        "staffCode": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userCode", "username", "password", "role", "staffCode", "status", "createdAt"]
+    },
+    "AdminEmail": {
+      "title": "AdminEmail",
+      "description": "Email address with admin authorization",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "E-commerce ledger transactions"
+    },
+    "/user_accounts/{userCode}": {
+      "schema": "UserAccount",
+      "description": "Dashboard authorization profiles"
+    },
+    "/admin_emails/{emailHash}": {
+      "schema": "AdminEmail",
+      "description": "Admin white-listed email addresses"
+    }
+  }
+}

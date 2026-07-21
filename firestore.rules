@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny for safety
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Allow full read and write on transactions, user accounts, and admin emails
+    match /transactions/{transactionId} {
+      allow read, write: if true;
+    }
+
+    match /user_accounts/{userCode} {
+      allow read, write: if true;
+    }
+
+    match /admin_emails/{emailHash} {
+      allow read, write: if true;
+    }
+  }
+}

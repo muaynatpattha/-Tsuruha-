@@ -290,6 +290,16 @@ export default function App() {
 
   // Load shared data from server on mount
   useEffect(() => {
+    // Parse Google Sheet ID from URL query parameters to support easy workspace sharing
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlSheetId = urlParams.get('sheetId');
+      if (urlSheetId && urlSheetId.trim() !== '') {
+        setSpreadsheetId(urlSheetId.trim());
+        localStorage.setItem('ecom_spreadsheet_id', urlSheetId.trim());
+      }
+    }
+
     const fetchSharedData = async () => {
       try {
         setIsLoadingSharedData(true);
@@ -1678,6 +1688,26 @@ export default function App() {
                   <span>เปิดแผ่นงาน ↗</span>
                 </button>
                 <span className="text-emerald-400 font-normal">|</span>
+                <button 
+                  onClick={() => {
+                    if (spreadsheetId) {
+                      const shareUrl = `${window.location.origin}${window.location.pathname}?sheetId=${spreadsheetId}`;
+                      navigator.clipboard.writeText(shareUrl)
+                        .then(() => {
+                          setToast({ message: '🔗 คัดลอกลิงก์แชร์ระบบร่วมกันแล้ว! ส่งต่อให้ทีมงานเพื่อเปิดและแสดงข้อมูลเดียวกัน', type: 'success' });
+                        })
+                        .catch(() => {
+                          setToast({ message: '⚠️ ไม่สามารถคัดลอกลิงก์โดยอัตโนมัติได้', type: 'error' });
+                        });
+                    }
+                  }}
+                  className="hover:underline text-xs text-emerald-100 font-bold flex items-center gap-0.5 bg-transparent border-none cursor-pointer"
+                  title="คัดลอกลิงก์แชร์ให้ผู้ใช้อื่นเปิดเพื่อซิงค์ข้อมูลสเปรดชีตแผ่นเดียวกัน"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>แชร์ลิงก์ระบบ 🔗</span>
+                </button>
+                <span className="text-emerald-400 font-normal">|</span>
                 <button
                   onClick={handleToggleSheets}
                   className="text-emerald-200 hover:text-white hover:underline text-xs bg-transparent border-none cursor-pointer"
@@ -2684,7 +2714,7 @@ export default function App() {
                   </div>
                   <div>
                     <h3 className="text-lg font-extrabold text-slate-800 tracking-tight">
-                      กระดานติดตามและวิเคราะห์สาเหตุการ Void (Void Tracking Dashboard)
+                      สาเหตุการ void
                     </h3>
                     <p className="text-[11px] text-slate-400 font-medium">
                       วิเคราะห์รายละเอียดและเหตุผลของการยกเลิกรายการขาย (Void) ทั้ง Shopee และ Lazada พร้อมตัวกรองเวลาโดยเฉพาะ
